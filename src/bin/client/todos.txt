@@ -1,0 +1,4 @@
+Remove uncessary plugins hierarchy: we do not need separate internal gui plugins, can include everything related to ui directly in the game state handler plugin.
+Also rename plugins to AppStateNameHandlerPlugin. We will have AppStatePlugin, hadnler plugins, and maybe some other plugins that are used across multiple states.
+Also probably rename WsResourceClient/ServerPlugin to just WsClientPlugin, Resource is uncessary - we may have some systems there also. Or remove plugins in general and export resource directly.
+Can't parse http body with nested json - can't know type upfront. Probably we can know the body type by header (e.g. if it's login response), and parse it on the application level (inside server_messages_receiver systems) using appropriate schema with Serialize/Deserialize implemented.

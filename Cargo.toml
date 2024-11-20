@@ -1,0 +1,34 @@
+[package]
+name = "bevy_io_game"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib/mod.rs"
+
+[[bin]]
+name = "client"
+path = "src/bin/client/main.rs"
+
+[[bin]]
+name = "server"
+path = "src/bin/server/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-channel = "2.3.1"
+bevy = { version = "0.13.2", features = ["dynamic_linking"] }
+bevy_iced = "0.5.0"
+futures-util = "0.3.30"
+reqwest = { version = "0.12.5", features = ["json"] }
+serde = "1.0.210"
+serde_json = "1.0.128"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
