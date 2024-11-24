@@ -24,11 +24,21 @@ pub struct POSTData {
     pub body: HashMap<String, String>,
 }
 
-#[derive(Clone)]
-// TODO: maybe also store all headers here
-pub struct HTTPResponse {
-    pub request_id: String,
+// #[derive(Debug, Clone)]
+// pub enum ResponseBody {
+//     Text(String),
+//     JSON(HashMap<String, String>),
+// }
+
+#[derive(Debug, Clone)]
+pub struct HTTPResponseData {
     pub all_headers: HashMap<String, String>,
     pub status_code: u16,
-    pub body: HashMap<String, String>,
+    pub body: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct HTTPResponse {
+    pub request_id: String,
+    pub data: Result<HTTPResponseData, ()>,
 }

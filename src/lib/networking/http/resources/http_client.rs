@@ -1,11 +1,14 @@
 use async_channel::{bounded, Receiver, Sender, TryRecvError};
+use reqwest::Error;
 
 use std::collections::HashMap;
 use std::thread;
 
 use bevy::prelude::*;
 
-use crate::networking::http::messages::{GETData, HTTPRequest, HTTPResponse, POSTData};
+use crate::networking::http::messages::{
+    GETData, HTTPRequest, HTTPResponse, HTTPResponseData, POSTData,
+};
 
 #[derive(Resource)]
 pub struct HTTPClient {
@@ -48,32 +51,29 @@ impl HTTPClient {
                     println!(
                         "Http client initiated, entering loop for sending/receiveing requests"
                     );
+
                     loop {
                         let msg = http_send_receiver
                             .recv()
                             .await
                             .expect("Could not recv message from channel for http requests");
 
-                        // should override
-                        let mut req_id = String::new();
-                        let resp = match msg {
-                            // !TODO: pass headers
+                        let (req_res, req_id) = match msg {
                             HTTPRequest::GET(GETData {
                                 req_id: request_id,
                                 url,
                                 not_req_id_headers: headers,
                             }) => {
-                                req_id = request_id.clone();
-                                client
+                                let resp = client
                                     .get(url)
                                     .headers(
                                         reqwest::header::HeaderMap::try_from(&headers)
                                             .expect("Couldn't parse headers map"),
                                     )
-                                    .header(String::from("request_id"), request_id.clone())
+                                    .header(String::from("request_id"), &request_id)
                                     .send()
-                                    .await
-                                    .expect("Failed to send get request")
+                                    .await;
+                                (resp, request_id)
                             }
                             HTTPRequest::POST(POSTData {
                                 req_id: request_id,
@@ -81,63 +81,58 @@ impl HTTPClient {
                                 not_req_id_headers: headers,
                                 body,
                             }) => {
-                                req_id = request_id.clone();
-                                client
+                                let resp = client
                                     .post(url)
                                     .headers(
                                         reqwest::header::HeaderMap::try_from(&headers)
                                             .expect("Couldn't parse headers map"),
                                     )
-                                    .header(String::from("request_id"), request_id)
+                                    .header(String::from("request_id"), &request_id)
                                     .json(&body)
                                     .send()
-                                    .await
-                                    .expect("Failed to send post request")
+                                    .await;
+                                (resp, request_id)
                             }
                         };
-                        let all_headers = resp
-                            .headers()
-                            .iter()
-                            .map(|(header_name, header_val)| {
-                                (
-                                    header_name.to_string(),
-                                    header_val
-                                        .to_str()
-                                        .expect("Couldn't parse header value to str")
-                                        .to_owned(),
-                                )
-                            })
-                            .collect::<HashMap<String, String>>();
 
-                        let status = resp.status().as_u16();
-
-                        let t = resp.text().await.expect("Couldn't parse to string wtf");
-                        let mut fake_body = HashMap::new();
-                        // TODO tmp. We actually wanna handle empty bodies as well as json
-                        fake_body.insert(String::from("username"), t);
+                        let resp_for_user = match req_res {
+                            Ok(resp) => {
+                                let all_headers = resp
+                                    .headers()
+                                    .iter()
+                                    .map(|(header_name, header_val)| {
+                                        (
+                                            header_name.to_string(),
+                                            header_val
+                                                .to_str()
+                                                .expect("Couldn't parse header value to str")
+                                                .to_owned(),
+                                        )
+                                    })
+                                    .collect::<HashMap<String, String>>();
+                                HTTPResponse {
+                                    request_id: req_id,
+                                    data: Ok(HTTPResponseData {
+                                        all_headers: all_headers,
+                                        status_code: resp.status().as_u16(),
+                                        body: resp
+                                            .text()
+                                            .await
+                                            .expect("Couldn't parse resp body to string"),
+                                    }),
+                                }
+                            }
+                            Err(e) => {
+                                println!("Couldn't send request with error(s): {:?}", e);
+                                HTTPResponse {
+                                    request_id: req_id,
+                                    data: Err(()),
+                                }
+                            }
+                        };
 
                         http_recv_sender
-                            .send(HTTPResponse {
-                                request_id: req_id,
-                                /*resp
-                                .headers()
-                                .get("request_id")
-                                .expect(
-                                    "Received response without request_id header in response",
-                                )
-                                .to_str()
-                                .expect(
-                                    "Couldn't parse string from request_id header in response",
-                                )
-                                .to_owned(),*/
-                                all_headers: all_headers,
-                                status_code: status,
-                                body: fake_body,
-                                /*resp
-                                .json::<HashMap<String, String>>()
-                                .await
-                                .expect("Could not convert response body to text"),*/
-                            })
+                            .send(resp_for_user)
                             .await
                             .expect("Could not send http response to channel");
                     }
